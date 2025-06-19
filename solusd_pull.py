@@ -1,5 +1,5 @@
-import requests
 import pandas as pd
+import requests
 
 
 def get_binance_data(symbols, interval='1d', limit=365):
@@ -21,26 +21,36 @@ def get_binance_data(symbols, interval='1d', limit=365):
 
         df['open_time'] = pd.to_datetime(df['open_time'], unit='ms')
         df['close_time'] = pd.to_datetime(df['close_time'], unit='ms')
-        df['date'] = df['open_time'].dt.date
-        df['open'] = df['open'].astype(float)
-        df['close'] = df['close'].astype(float)
-        df['high'] = df['high'].astype(float)
-        df['low'] = df['low'].astype(float)
-        df['volume'] = df['volume'].astype(float)
+        # Short date format (YYYY-MM-DD)
+        df['date'] = df['open_time'].dt.strftime('%Y-%m-%d')
+        # Convert numeric columns to float64 (double)
+        df['open'] = pd.to_numeric(df['open'], errors='coerce')
+        df['close'] = pd.to_numeric(df['close'], errors='coerce')
+        df['high'] = pd.to_numeric(df['high'], errors='coerce')
+        df['low'] = pd.to_numeric(df['low'], errors='coerce')
+        df['volume'] = pd.to_numeric(df['volume'], errors='coerce')
         df['volatility'] = df['high'] - df['low']
 
-        # For bid/ask, you need to call the ticker/bookTicker endpoint
-        # (current only, not historical)
-        bid_ask_url = (
-            f'https://api.binance.us/api/v3/ticker/bookTicker?symbol={symbol}'
-        )
-        bid_ask = requests.get(bid_ask_url).json()
-        df['bid'] = float(bid_ask['bidPrice'])
-        df['ask'] = float(bid_ask['askPrice'])
+        # Optionally, fetch bid/ask for each symbol (current only, not historical)
+        try:
+            ticker_url = f'https://api.binance.us/api/v3/ticker/bookTicker?symbol={symbol}'
+            ticker_resp = requests.get(ticker_url)
+            bid_ask = ticker_resp.json()
+            df['bid'] = pd.to_numeric(bid_ask.get('bidPrice', None), errors='coerce')
+            df['ask'] = pd.to_numeric(bid_ask.get('askPrice', None), errors='coerce')
+        except Exception:
+            df['bid'] = None
+            df['ask'] = None
 
-        df['symbol'] = symbol  # Add symbol column
-        all_dfs.append(df[['open_time','close_time','date', 'symbol', 'open', 'close', 'bid', 'ask', 'volume', 'volatility']])
+        df['symbol'] = symbol
+        all_dfs.append(df)
 
-    # Concatenate all DataFrames
-    result_df = pd.concat(all_dfs, ignore_index=True)
-    return result_df
+    if all_dfs:
+        return pd.concat(all_dfs, ignore_index=True)
+    else:
+        return pd.DataFrame()
+
+
+# if __name__ == "__main__":
+    # get_binance_data(['SOLUSDT', 'BTCUSDT', 'ETCUSDT', 'JUPUSDT','ETHUSDT','XRPUSDT'], '1d', 365) # Fetch data for SOLUSDT
+    # DataFrameGUI(df)
