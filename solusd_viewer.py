@@ -1,31 +1,141 @@
+# Dependency check and import block
+missing_deps = []
 try:
     import pandas as pd
-    from datetime import datetime, timedelta
+except ImportError:
+    missing_deps.append("pandas")
+try:
     import tkinter as tk
-    from tkinter import ttk, simpledialog, messagebox
+    from tkinter import ttk, messagebox
+except ImportError:
+    missing_deps.append("tkinter")
+try:
     import customtkinter
+except ImportError:
+    missing_deps.append("customtkinter")
+try:
     import matplotlib
-    matplotlib.use("TkAgg")  # Ensure Tkinter backend for matplotlib
+    matplotlib.use("TkAgg")
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
     import matplotlib.pyplot as plt
-    from solusd_pull import get_binance_data  # Import the function to fetch data
+except ImportError:
+    missing_deps.append("matplotlib")
+try:
     import tkinter.filedialog as filedialog
-    import functools  # <-- Add this import
-except ImportError as e:
-    print(f"Missing dependency: {e}. Please install the required package and try again.")
-    raise
+except ImportError:
+    missing_deps.append("tkinter.filedialog")
+try:
+    import functools
+except ImportError:
+    missing_deps.append("functools")
+try:
+    import sys
+    import os
+except ImportError:
+    missing_deps.append("sys or os")
+try:
+    from PIL import Image
+except ImportError:
+    missing_deps.append("Pillow (PIL)")
+try:
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+    from crypto_viewer.lib.solusd_pull import get_binance_data
+except Exception:
+    missing_deps.append("crypto_viewer.lib.solusd_pull (get_binance_data)")
 
-#
-customtkinter.set_default_color_theme("dark-blue")  # Set the customtkinter theme
+if missing_deps:
+    print(f"Missing dependencies: {', '.join(missing_deps)}. Please install the required packages and try again.")
+    import sys
+    sys.exit(1)
+
+# Set the customtkinter theme and appearance
+customtkinter.set_default_color_theme("dark-blue")
 customtkinter.set_appearance_mode("dark")
 
 class DataFrameGUI:
+    """
+    A GUI for displaying and interacting with a DataFrame of cryptocurrency data.
+    Features include moving columns, filtering data, pivoting, and plotting graphs.
+    Uses customtkinter for a modern UI look.
+    """
     def __init__(self, df):
-        self.original_df = df  # Store a reference to the original DataFrame
+        self.original_df = df
         self.df = df
-        self.unique_values_cache = {}  # Cache for unique values
-        self.root = customtkinter.CTk()  # Use CTk window for colorful UI
-        self.root.title("Crypto Data")
+        self.unique_values_cache = {}
+        self.root = customtkinter.CTk()
+        # --- Resize window 50% more vertically ---
+        self.root.geometry("1200x900")  # Original was about 1200x600, now 1200x900
+        self.root.title("Crypto Data Viewer")
+
+        # --- Add a styled title button like custom_viewer.py ---
+        title_btn = customtkinter.CTkButton(
+            master=self.root,
+            text="Crypto Data Viewer",
+            corner_radius=8,
+            fg_color="#4158D0",
+            font=("Arial", 20, "bold"),
+            height=40
+        )
+        title_btn.place(relx=0.5, rely=0.05, anchor=customtkinter.CENTER)
+
+        # --- Add a styled image button like custom_viewer.py ---
+        try:
+            img = Image.open("message_icon.png")
+        except FileNotFoundError:
+            img = Image.new("RGBA", (32, 32), (255, 0, 0, 0))
+        ctk_img = customtkinter.CTkImage(dark_image=img, light_image=img, size=(32, 32))
+        img_btn = customtkinter.CTkButton(
+            master=self.root,
+            text="Info",
+            corner_radius=32,
+            fg_color="#4158D0",
+            hover_color="#C850C0",
+            border_color="#FFCC00",
+            border_width=4,
+            image=ctk_img,
+            font=("Arial", 14)
+        )
+        img_btn.place(relx=0.92, rely=0.05, anchor=customtkinter.CENTER)
+
+        # --- Add a combobox like custom_viewer.py ---
+        combobox = customtkinter.CTkComboBox(
+            master=self.root,
+            values=self.df.columns.tolist() if isinstance(df, pd.DataFrame) else ["No Data"],
+            width=180
+        )
+        combobox.place(relx=0.5, rely=0.12, anchor=customtkinter.CENTER)
+
+        # --- Add a slider like custom_viewer.py ---
+        def slider_event(value):
+            pass
+        slider = customtkinter.CTkSlider(
+            master=self.root,
+            width=140,
+            height=28,
+            from_=0,
+            to=100,
+            command=slider_event
+        )
+        slider.place(relx=0.15, rely=0.05, anchor=customtkinter.CENTER)
+
+        # --- Add a switch like custom_viewer.py ---
+        switch_var = customtkinter.StringVar(value='on')
+        def switch_event():
+            print('switch toggled, current value:', switch_var.get())
+        switch = customtkinter.CTkSwitch(
+            master=self.root,
+            text='Show Table',
+            command=switch_event,
+            width=100,
+            height=24,
+            switch_width=36,
+            switch_height=18,
+            variable=switch_var,
+            onvalue='on',
+            offvalue='off'
+        )
+        switch.place(relx=0.85, rely=0.05, anchor=customtkinter.CENTER)
+
         if isinstance(df, pd.DataFrame) and not df.empty:
             self.columns = list(df.columns)
         else:
@@ -34,19 +144,16 @@ class DataFrameGUI:
             return
         self.dragged_col = None
         self.create_widgets()
-        self.update_filter_values()  # Ensure filter values are initialized
+        self.update_filter_values()
         self.populate_tree()
         self.root.mainloop()
-
 
     def create_widgets(self):
         # Frame for column controls
         col_frame = customtkinter.CTkFrame(self.root, fg_color="#1111A9")
-        col_frame.pack(fill="x", padx=5, pady=5)
-        
-        #Export to Excel button
+        col_frame.place(relx=0.5, rely=0.20, anchor=customtkinter.CENTER, relwidth=0.97)
 
-        # --- Add Export to Excel button here ---
+        # Export to Excel button
         export_excel_btn = customtkinter.CTkButton(
             col_frame,
             text="Export to Excel",
@@ -102,7 +209,7 @@ class DataFrameGUI:
             fg_color="#333366"
         )
         self.islike_entry.pack(side="left", padx=2)
-        self.islike_entry.pack_forget()  # Hide initially
+        self.islike_entry.pack_forget()
 
         filter_btn = customtkinter.CTkButton(
             col_frame, text="Apply Filter", fg_color="#225533", hover_color="#113322", command=self.apply_filter
@@ -116,7 +223,6 @@ class DataFrameGUI:
             command=self.clear_filter
         )
         clear_filter_btn.pack(side="left", padx=2)
-        # --- End filter controls ---
 
         customtkinter.CTkLabel(col_frame, text="Move Column:", text_color="#FFCC00").pack(side="left")
         self.col_var = tk.StringVar()
@@ -170,11 +276,11 @@ class DataFrameGUI:
             col_frame, text="Bar Chart", fg_color="#225533", hover_color="#113322", command=lambda: self.plot_graph("bar")
         )
         bar_btn.pack(side="left", padx=2)
-        # --- End graph controls ---
 
         # Data table (still ttk for best compatibility)
         self.frame = ttk.Frame(self.root)
-        self.frame.pack(fill=tk.BOTH, expand=True)
+        # Place the table lower to use the extra vertical space
+        self.frame.place(relx=0.5, rely=0.65, anchor=customtkinter.CENTER, relwidth=0.98, relheight=0.7)
         self.tree = ttk.Treeview(
             self.frame,
             columns=self.columns,
@@ -192,7 +298,7 @@ class DataFrameGUI:
         self.tree_menu = tk.Menu(self.tree, tearoff=0)
         self.tree_menu.add_command(label="Export as CSV", command=self.export_current_view_to_csv)
         self.tree_menu.add_command(label="Export as Excel", command=self.export_current_view_to_excel)
-        self.tree.bind("<Button-3>", self.show_tree_menu)  # Right-click
+        self.tree.bind("<Button-3>", self.show_tree_menu)
 
         # Track sort order for each column
         self._sort_orders = {col: False for col in self.columns}
@@ -544,10 +650,16 @@ class PivotWindow:
 
 if __name__ == "__main__":
     try:
-        df = get_binance_data(['SOLUSDT', 'BTCUSDT', 'ETCUSDT', 'JUPUSDT', 'ETHUSDT', 'XRPUSDT'], '1d', 365)  # Fetch data for SOLUSDT
+        df = get_binance_data(['SOLUSDT', 'BTCUSDT', 'ETCUSDT', 'JUPUSDT', 'ETHUSDT', 'XRPUSDT'], '1d', 365)
         if df is not None and not df.empty:
             DataFrameGUI(df)
         else:
+            root = tk.Tk()
+            root.withdraw()
             messagebox.showerror("Error", "Failed to fetch data or received empty DataFrame.")
+            root.destroy()
     except Exception as e:
+        root = tk.Tk()
+        root.withdraw()
         messagebox.showerror("Error", f"An error occurred while fetching data: {e}")
+        root.destroy()
